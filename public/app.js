@@ -37,6 +37,8 @@ const fileInput = document.getElementById("image");
 const dropzone = document.getElementById("dropzone");
 const dropzoneText = document.getElementById("dropzone-text");
 const fileListEl = document.getElementById("file-list");
+const imageUrlInput = document.getElementById("image-url");
+const addUrlBtn = document.getElementById("add-url-btn");
 const captionInput = document.getElementById("caption");
 const submitBtn = document.getElementById("submit-btn");
 const statusEl = document.getElementById("status");
@@ -120,15 +122,37 @@ scheduleTypeSelect.addEventListener("change", () => {
   accountSelect.appendChild(option);
 });
 
-function fileKey(file) {
-  return `${file.name}-${file.size}-${file.lastModified}`;
+function itemKey(item) {
+  return item.type === "url"
+    ? `url-${item.url}`
+    : `file-${item.file.name}-${item.file.size}-${item.file.lastModified}`;
+}
+
+function itemName(item) {
+  return item.type === "url" ? item.url : item.file.name;
+}
+
+function urlBasename(url) {
+  try {
+    const path = new URL(url).pathname;
+    const last = path.split("/").filter(Boolean).pop();
+    return last || "imagem-url";
+  } catch {
+    return "imagem-url";
+  }
+}
+
+function guessMimeFromUrl(url) {
+  const ext = urlBasename(url).split(".").pop().toLowerCase();
+  const map = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif" };
+  return map[ext] || "image/jpeg";
 }
 
 function renderFileList() {
   fileListEl.innerHTML = "";
   dropzoneText.hidden = selectedFiles.length > 0;
 
-  selectedFiles.forEach((file, index) => {
+  selectedFiles.forEach((item, index) => {
     const li = document.createElement("li");
     li.draggable = true;
 
@@ -161,17 +185,22 @@ function renderFileList() {
     });
 
     const img = document.createElement("img");
-    img.alt = file.name;
-    const reader = new FileReader();
-    reader.onload = () => {
-      img.src = reader.result;
-      img.addEventListener("click", () => openLightbox(reader.result));
-    };
-    reader.readAsDataURL(file);
+    img.alt = itemName(item);
+    if (item.type === "url") {
+      img.src = item.url;
+      img.addEventListener("click", () => openLightbox(item.url));
+    } else {
+      const reader = new FileReader();
+      reader.onload = () => {
+        img.src = reader.result;
+        img.addEventListener("click", () => openLightbox(reader.result));
+      };
+      reader.readAsDataURL(item.file);
+    }
 
     const name = document.createElement("span");
     name.className = "file-name";
-    name.textContent = file.name;
+    name.textContent = itemName(item);
 
     const actions = document.createElement("div");
     actions.className = "file-actions";
@@ -209,16 +238,29 @@ function renderFileList() {
 }
 
 function addFiles(fileList) {
-  const existingKeys = new Set(selectedFiles.map(fileKey));
+  const existingKeys = new Set(selectedFiles.map(itemKey));
   Array.from(fileList)
     .filter((file) => file.type.startsWith("image/"))
     .forEach((file) => {
-      if (!existingKeys.has(fileKey(file))) {
-        selectedFiles.push(file);
-        existingKeys.add(fileKey(file));
+      const item = { type: "file", file };
+      const key = itemKey(item);
+      if (!existingKeys.has(key)) {
+        selectedFiles.push(item);
+        existingKeys.add(key);
       }
     });
   renderFileList();
+}
+
+function addUrl(url) {
+  url = url.trim();
+  if (!url) return;
+  const item = { type: "url", url };
+  const key = itemKey(item);
+  if (!selectedFiles.some((existing) => itemKey(existing) === key)) {
+    selectedFiles.push(item);
+    renderFileList();
+  }
 }
 
 fileInput.addEventListener("change", () => {
@@ -235,6 +277,19 @@ fileInput.addEventListener("change", () => {
 
 dropzone.addEventListener("drop", (e) => {
   addFiles(e.dataTransfer.files);
+});
+
+addUrlBtn.addEventListener("click", () => {
+  addUrl(imageUrlInput.value);
+  imageUrlInput.value = "";
+});
+
+imageUrlInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    addUrl(imageUrlInput.value);
+    imageUrlInput.value = "";
+  }
 });
 
 function setStatus(message, type) {
@@ -294,11 +349,17 @@ function compressImage(file, maxDimension = 1600, quality = 0.82) {
   });
 }
 
-async function postImage(file, caption, account) {
-  const compressed = await compressImage(file);
-
+async function postImage(item, caption, account) {
   const formData = new FormData();
-  formData.append("image", compressed, file.name);
+
+  if (item.type === "url") {
+    formData.append("imageUrl", item.url);
+    formData.append("mimetype", guessMimeFromUrl(item.url));
+  } else {
+    const compressed = await compressImage(item.file);
+    formData.append("image", compressed, item.file.name);
+  }
+
   formData.append("caption", caption);
   formData.append("session", account);
 
@@ -331,21 +392,26 @@ function supabaseHeaders(extra = {}) {
   };
 }
 
-async function scheduleImage(file, caption, account, schedule) {
-  const compressed = await compressImage(file);
-  const base64 = await fileToBase64(compressed);
-
+async function scheduleImage(item, caption, account, schedule) {
   const row = {
     account_id: account,
     caption,
-    image_data: base64,
-    image_mimetype: compressed.type,
-    image_filename: file.name,
     recurrence_type: schedule.type,
     scheduled_at: schedule.type === "once" ? schedule.scheduledAt : null,
     recurrence_days: schedule.type === "weekly" ? schedule.days : null,
     recurrence_time: schedule.type === "weekly" ? schedule.time : null,
   };
+
+  if (item.type === "url") {
+    row.image_url = item.url;
+    row.image_filename = urlBasename(item.url);
+  } else {
+    const compressed = await compressImage(item.file);
+    const base64 = await fileToBase64(compressed);
+    row.image_data = base64;
+    row.image_mimetype = compressed.type;
+    row.image_filename = item.file.name;
+  }
 
   const response = await fetch(`${window.SUPABASE_URL}/rest/v1/scheduled_posts`, {
     method: "POST",
@@ -383,7 +449,7 @@ async function loadScheduledPosts() {
       const li = document.createElement("li");
 
       const img = document.createElement("img");
-      const imgSrc = `data:${post.image_mimetype};base64,${post.image_data}`;
+      const imgSrc = post.image_url || `data:${post.image_mimetype};base64,${post.image_data}`;
       img.src = imgSrc;
       img.alt = post.image_filename || "Imagem agendada";
       img.addEventListener("click", () => openLightbox(imgSrc));
@@ -469,7 +535,7 @@ form.addEventListener("submit", async (e) => {
         successCount++;
         progressFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
       } catch (err) {
-        setStatus(`Falha ao agendar "${selectedFiles[i].name}": ${err.message}`, "error");
+        setStatus(`Falha ao agendar "${itemName(selectedFiles[i])}": ${err.message}`, "error");
         submitBtn.disabled = false;
         return;
       }
@@ -508,7 +574,7 @@ form.addEventListener("submit", async (e) => {
       successCount++;
       progressFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
     } catch (err) {
-      setStatus(`Falha ao publicar "${selectedFiles[i].name}": ${err.message}`, "error");
+      setStatus(`Falha ao publicar "${itemName(selectedFiles[i])}": ${err.message}`, "error");
       submitBtn.disabled = false;
       return;
     }
