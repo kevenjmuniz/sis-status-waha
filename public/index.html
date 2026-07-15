@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Postar Status</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<main>
+  <section id="auth-gate">
+    <h1>Acesso restrito</h1>
+    <p class="subtitle">Digite a senha para acessar a página de publicação.</p>
+    <form id="auth-form">
+      <input type="password" id="password" placeholder="Senha" autocomplete="current-password" required>
+      <button type="submit">Entrar</button>
+    </form>
+    <p id="auth-error" class="error"></p>
+  </section>
+
+  <section id="app" hidden>
+    <h1>Postar Status no WhatsApp</h1>
+    <p class="subtitle">Envie uma ou mais imagens e uma legenda. Cada imagem vira um Status via WAHA.</p>
+
+    <form id="post-form">
+      <label for="account">Conta</label>
+      <select id="account" name="account"></select>
+
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="image" name="image" accept="image/*" multiple>
+        <span id="dropzone-text">Clique ou arraste uma ou mais imagens aqui</span>
+      </label>
+
+      <ul id="file-list"></ul>
+
+      <label for="caption">Legenda (opcional, aplicada a todas as imagens)</label>
+      <textarea id="caption" name="caption" rows="3" placeholder="Escreva uma legenda para o status..."></textarea>
+
+      <div class="mode-toggle">
+        <label><input type="radio" name="mode" value="now" checked> Publicar agora</label>
+        <label><input type="radio" name="mode" value="schedule"> Agendar</label>
+      </div>
+
+      <div id="schedule-fields" hidden>
+        <label for="schedule-type">Tipo de agendamento</label>
+        <select id="schedule-type">
+          <option value="once">Uma vez</option>
+          <option value="weekly">Recorrente (dias da semana)</option>
+        </select>
+
+        <div id="once-fields">
+          <label for="schedule-datetime">Data e hora</label>
+          <input type="datetime-local" id="schedule-datetime">
+        </div>
+
+        <div id="weekly-fields" hidden>
+          <label>Dias da semana</label>
+          <div class="weekday-picker">
+            <label><input type="checkbox" name="weekday" value="0"> Dom</label>
+            <label><input type="checkbox" name="weekday" value="1"> Seg</label>
+            <label><input type="checkbox" name="weekday" value="2"> Ter</label>
+            <label><input type="checkbox" name="weekday" value="3"> Qua</label>
+            <label><input type="checkbox" name="weekday" value="4"> Qui</label>
+            <label><input type="checkbox" name="weekday" value="5"> Sex</label>
+            <label><input type="checkbox" name="weekday" value="6"> Sáb</label>
+          </div>
+
+          <label for="schedule-time">Horário</label>
+          <input type="time" id="schedule-time">
+        </div>
+      </div>
+
+      <button type="submit" id="submit-btn">Publicar Status</button>
+
+      <div id="progress-bar" hidden>
+        <div id="progress-fill"></div>
+      </div>
+    </form>
+
+    <p id="status" role="status"></p>
+
+    <section id="scheduled-section">
+      <h2>Agendados</h2>
+      <ul id="scheduled-list"></ul>
+      <p id="scheduled-empty" hidden>Nenhum post agendado.</p>
+    </section>
+  </section>
+</main>
+
+<div id="lightbox" class="overlay" hidden>
+  <img id="lightbox-img" alt="Pré-visualização ampliada">
+</div>
+
+<div id="confirm-modal" class="overlay" hidden>
+  <div class="modal-box">
+    <p id="confirm-message"></p>
+    <div class="modal-actions">
+      <button type="button" id="confirm-cancel" class="btn-secondary">Cancelar</button>
+      <button type="button" id="confirm-ok" class="btn-danger">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

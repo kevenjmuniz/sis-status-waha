@@ -1,0 +1,9 @@
+{
+  "name": "sis-status-post",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pagina de upload de imagem para postar Status no WhatsApp via webhook n8n + WAHA",
+  "scripts": {
+    "dev": "node server.js"
+  }
+}
