@@ -364,6 +364,7 @@ function compressImage(file, maxDimension = 1600, quality = 0.82) {
 
 async function postImage(item, caption, account) {
   const formData = new FormData();
+  formData.append("type", "status");
 
   if (item.type === "url") {
     formData.append("imageUrl", item.url);
