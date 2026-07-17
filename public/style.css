@@ -315,7 +315,8 @@ button:disabled {
   cursor: pointer;
 }
 
-#schedule-fields {
+#schedule-fields,
+#message-schedule-fields {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -326,12 +327,17 @@ button:disabled {
 
 #schedule-fields[hidden],
 #once-fields[hidden],
-#weekly-fields[hidden] {
+#weekly-fields[hidden],
+#message-schedule-fields[hidden],
+#message-once-fields[hidden],
+#message-weekly-fields[hidden] {
   display: none;
 }
 
 #schedule-datetime,
-#schedule-time {
+#schedule-time,
+#message-schedule-datetime,
+#message-schedule-time {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -356,18 +362,21 @@ button:disabled {
   cursor: pointer;
 }
 
-#scheduled-section {
+#scheduled-section,
+#message-scheduled-section {
   margin-top: 1.5rem;
   border-top: 1px solid var(--border);
   padding-top: 1rem;
 }
 
-#scheduled-section h2 {
+#scheduled-section h2,
+#message-scheduled-section h2 {
   font-size: 1rem;
   margin: 0 0 0.75rem;
 }
 
-#scheduled-list {
+#scheduled-list,
+#message-scheduled-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -376,7 +385,8 @@ button:disabled {
   gap: 0.5rem;
 }
 
-#scheduled-list li {
+#scheduled-list li,
+#message-scheduled-list li {
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -385,7 +395,8 @@ button:disabled {
   padding: 0.5rem 0.6rem;
 }
 
-#scheduled-list img {
+#scheduled-list img,
+#message-scheduled-list img {
   width: 40px;
   height: 40px;
   object-fit: cover;
@@ -393,19 +404,22 @@ button:disabled {
   flex-shrink: 0;
 }
 
-#scheduled-list .scheduled-info {
+#scheduled-list .scheduled-info,
+#message-scheduled-list .scheduled-info {
   flex: 1;
   font-size: 0.8rem;
   color: var(--muted);
 }
 
-#scheduled-list .scheduled-info strong {
+#scheduled-list .scheduled-info strong,
+#message-scheduled-list .scheduled-info strong {
   display: block;
   color: var(--text);
   font-size: 0.85rem;
 }
 
-#scheduled-list button {
+#scheduled-list button,
+#message-scheduled-list button {
   width: auto;
   padding: 0.3rem 0.6rem;
   font-size: 0.8rem;
@@ -414,14 +428,16 @@ button:disabled {
   color: #dc2626;
 }
 
-#scheduled-empty {
+#scheduled-empty,
+#message-scheduled-empty {
   color: var(--muted);
   font-size: 0.85rem;
 }
 
 #file-list img,
 #scheduled-list img,
-#message-image-list img {
+#message-image-list img,
+#message-scheduled-list img {
   cursor: zoom-in;
 }
 

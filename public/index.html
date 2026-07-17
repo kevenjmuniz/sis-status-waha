@@ -125,10 +125,50 @@
         <label for="message-text">Mensagem</label>
         <textarea id="message-text" rows="4" placeholder="Escreva a mensagem..."></textarea>
 
+        <div class="mode-toggle">
+          <label><input type="radio" name="message-mode" value="now" checked> Enviar agora</label>
+          <label><input type="radio" name="message-mode" value="schedule"> Agendar</label>
+        </div>
+
+        <div id="message-schedule-fields" hidden>
+          <label for="message-schedule-type">Tipo de agendamento</label>
+          <select id="message-schedule-type">
+            <option value="once">Uma vez</option>
+            <option value="weekly">Recorrente (dias da semana)</option>
+          </select>
+
+          <div id="message-once-fields">
+            <label for="message-schedule-datetime">Data e hora</label>
+            <input type="datetime-local" id="message-schedule-datetime">
+          </div>
+
+          <div id="message-weekly-fields" hidden>
+            <label>Dias da semana</label>
+            <div class="weekday-picker">
+              <label><input type="checkbox" name="message-weekday" value="0"> Dom</label>
+              <label><input type="checkbox" name="message-weekday" value="1"> Seg</label>
+              <label><input type="checkbox" name="message-weekday" value="2"> Ter</label>
+              <label><input type="checkbox" name="message-weekday" value="3"> Qua</label>
+              <label><input type="checkbox" name="message-weekday" value="4"> Qui</label>
+              <label><input type="checkbox" name="message-weekday" value="5"> Sex</label>
+              <label><input type="checkbox" name="message-weekday" value="6"> Sáb</label>
+            </div>
+
+            <label for="message-schedule-time">Horário</label>
+            <input type="time" id="message-schedule-time">
+          </div>
+        </div>
+
         <button type="submit" id="message-submit-btn">Enviar Mensagem</button>
       </form>
 
       <p id="message-status" role="status"></p>
+
+      <section id="message-scheduled-section">
+        <h2>Agendados</h2>
+        <ul id="message-scheduled-list"></ul>
+        <p id="message-scheduled-empty" hidden>Nenhuma mensagem agendada.</p>
+      </section>
     </div>
   </section>
 </main>

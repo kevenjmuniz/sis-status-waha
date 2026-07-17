@@ -12,6 +12,7 @@ function unlockApp() {
   appSection.hidden = false;
   if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
     loadScheduledPosts();
+    loadMessageScheduledPosts();
   }
 }
 
@@ -404,9 +405,22 @@ function supabaseHeaders(extra = {}) {
   };
 }
 
+async function insertScheduledPost(row) {
+  const response = await fetch(`${window.SUPABASE_URL}/rest/v1/scheduled_posts`, {
+    method: "POST",
+    headers: supabaseHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(row),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Supabase respondeu com status ${response.status}`);
+  }
+}
+
 async function scheduleImage(item, caption, account, schedule) {
   const row = {
     account_id: account,
+    post_type: "status",
     caption,
     recurrence_type: schedule.type,
     scheduled_at: schedule.type === "once" ? schedule.scheduledAt : null,
@@ -425,15 +439,35 @@ async function scheduleImage(item, caption, account, schedule) {
     row.image_filename = item.file.name;
   }
 
-  const response = await fetch(`${window.SUPABASE_URL}/rest/v1/scheduled_posts`, {
-    method: "POST",
-    headers: supabaseHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify(row),
-  });
+  await insertScheduledPost(row);
+}
 
-  if (!response.ok) {
-    throw new Error(`Supabase respondeu com status ${response.status}`);
+async function scheduleMessage(item, text, account, chatId, schedule) {
+  const row = {
+    account_id: account,
+    post_type: "message",
+    chat_id: chatId,
+    caption: text,
+    recurrence_type: schedule.type,
+    scheduled_at: schedule.type === "once" ? schedule.scheduledAt : null,
+    recurrence_days: schedule.type === "weekly" ? schedule.days : null,
+    recurrence_time: schedule.type === "weekly" ? schedule.time : null,
+  };
+
+  if (item) {
+    if (item.type === "url") {
+      row.image_url = item.url;
+      row.image_filename = urlBasename(item.url);
+    } else {
+      const compressed = await compressImage(item.file);
+      const base64 = await fileToBase64(compressed);
+      row.image_data = base64;
+      row.image_mimetype = compressed.type;
+      row.image_filename = item.file.name;
+    }
   }
+
+  await insertScheduledPost(row);
 }
 
 function formatScheduleInfo(post) {
@@ -445,10 +479,19 @@ function formatScheduleInfo(post) {
   return `${days} às ${(post.recurrence_time || "").slice(0, 5)}`;
 }
 
+async function cancelScheduledPost(id, reloadFn) {
+  await fetch(`${window.SUPABASE_URL}/rest/v1/rpc/cancel_scheduled_post`, {
+    method: "POST",
+    headers: supabaseHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ post_id: id }),
+  });
+  reloadFn();
+}
+
 async function loadScheduledPosts() {
   try {
     const response = await fetch(
-      `${window.SUPABASE_URL}/rest/v1/scheduled_posts?status=eq.pending&order=created_at.desc`,
+      `${window.SUPABASE_URL}/rest/v1/scheduled_posts?status=eq.pending&post_type=eq.status&order=created_at.desc`,
       { headers: supabaseHeaders() }
     );
     if (!response.ok) return;
@@ -479,7 +522,7 @@ async function loadScheduledPosts() {
       cancelBtn.textContent = "Cancelar";
       cancelBtn.addEventListener("click", async () => {
         if (await askConfirm("Cancelar este post agendado?")) {
-          cancelScheduledPost(post.id);
+          cancelScheduledPost(post.id, loadScheduledPosts);
         }
       });
 
@@ -491,19 +534,10 @@ async function loadScheduledPosts() {
   }
 }
 
-async function cancelScheduledPost(id) {
-  await fetch(`${window.SUPABASE_URL}/rest/v1/rpc/cancel_scheduled_post`, {
-    method: "POST",
-    headers: supabaseHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ post_id: id }),
-  });
-  loadScheduledPosts();
-}
-
-function buildSchedule() {
-  if (scheduleTypeSelect.value === "once") {
-    if (!scheduleDatetimeInput.value) return { error: "Escolha a data e hora do agendamento." };
-    const scheduledAt = new Date(scheduleDatetimeInput.value);
+function buildScheduleFrom(typeSelect, datetimeInput, timeInput, weekdayCheckboxes) {
+  if (typeSelect.value === "once") {
+    if (!datetimeInput.value) return { error: "Escolha a data e hora do agendamento." };
+    const scheduledAt = new Date(datetimeInput.value);
     if (scheduledAt <= new Date()) return { error: "A data/hora precisa ser no futuro." };
     return { type: "once", scheduledAt: scheduledAt.toISOString() };
   }
@@ -512,8 +546,12 @@ function buildSchedule() {
     .filter((cb) => cb.checked)
     .map((cb) => Number(cb.value));
   if (days.length === 0) return { error: "Escolha ao menos um dia da semana." };
-  if (!scheduleTimeInput.value) return { error: "Escolha o horário do agendamento." };
-  return { type: "weekly", days, time: `${scheduleTimeInput.value}:00` };
+  if (!timeInput.value) return { error: "Escolha o horário do agendamento." };
+  return { type: "weekly", days, time: `${timeInput.value}:00` };
+}
+
+function buildSchedule() {
+  return buildScheduleFrom(scheduleTypeSelect, scheduleDatetimeInput, scheduleTimeInput, weekdayCheckboxes);
 }
 
 form.addEventListener("submit", async (e) => {
@@ -618,6 +656,88 @@ const messageImageListEl = document.getElementById("message-image-list");
 const messageTextInput = document.getElementById("message-text");
 const messageSubmitBtn = document.getElementById("message-submit-btn");
 const messageStatusEl = document.getElementById("message-status");
+
+const messageModeRadios = document.querySelectorAll('input[name="message-mode"]');
+const messageScheduleFields = document.getElementById("message-schedule-fields");
+const messageScheduleTypeSelect = document.getElementById("message-schedule-type");
+const messageOnceFields = document.getElementById("message-once-fields");
+const messageWeeklyFields = document.getElementById("message-weekly-fields");
+const messageScheduleDatetimeInput = document.getElementById("message-schedule-datetime");
+const messageScheduleTimeInput = document.getElementById("message-schedule-time");
+const messageWeekdayCheckboxes = document.querySelectorAll('input[name="message-weekday"]');
+const messageScheduledListEl = document.getElementById("message-scheduled-list");
+const messageScheduledEmptyEl = document.getElementById("message-scheduled-empty");
+
+function currentMessageMode() {
+  return document.querySelector('input[name="message-mode"]:checked').value;
+}
+
+messageModeRadios.forEach((radio) => {
+  radio.addEventListener("change", () => {
+    messageScheduleFields.hidden = currentMessageMode() !== "schedule";
+    messageSubmitBtn.textContent = currentMessageMode() === "schedule" ? "Agendar Mensagem" : "Enviar Mensagem";
+  });
+});
+
+messageScheduleTypeSelect.addEventListener("change", () => {
+  const isOnce = messageScheduleTypeSelect.value === "once";
+  messageOnceFields.hidden = !isOnce;
+  messageWeeklyFields.hidden = isOnce;
+});
+
+function buildMessageSchedule() {
+  return buildScheduleFrom(messageScheduleTypeSelect, messageScheduleDatetimeInput, messageScheduleTimeInput, messageWeekdayCheckboxes);
+}
+
+async function loadMessageScheduledPosts() {
+  try {
+    const response = await fetch(
+      `${window.SUPABASE_URL}/rest/v1/scheduled_posts?status=eq.pending&post_type=eq.message&order=created_at.desc`,
+      { headers: supabaseHeaders() }
+    );
+    if (!response.ok) return;
+
+    const posts = await response.json();
+    messageScheduledListEl.innerHTML = "";
+    messageScheduledEmptyEl.hidden = posts.length > 0;
+
+    posts.forEach((post) => {
+      const li = document.createElement("li");
+
+      if (post.image_url || post.image_data) {
+        const img = document.createElement("img");
+        const imgSrc = post.image_url || `data:${post.image_mimetype};base64,${post.image_data}`;
+        img.src = imgSrc;
+        img.alt = post.image_filename || "Imagem agendada";
+        img.addEventListener("click", () => openLightbox(imgSrc));
+        li.appendChild(img);
+      }
+
+      const info = document.createElement("div");
+      info.className = "scheduled-info";
+      const accountLabel =
+        (window.WHATSAPP_ACCOUNTS || []).find((a) => a.id === post.account_id)?.label || post.account_id;
+      const accountStrong = document.createElement("strong");
+      const destino = (post.chat_id || "").replace(/@c\.us$/, "").replace(/@g\.us$/, " (grupo)");
+      accountStrong.textContent = `${accountLabel} → ${destino}`;
+      info.append(accountStrong, document.createTextNode(formatScheduleInfo(post)));
+
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.textContent = "Cancelar";
+      cancelBtn.addEventListener("click", async () => {
+        if (await askConfirm("Cancelar esta mensagem agendada?")) {
+          cancelScheduledPost(post.id, loadMessageScheduledPosts);
+        }
+      });
+
+      li.append(info, cancelBtn);
+      messageScheduledListEl.appendChild(li);
+    });
+  } catch {
+    // Silently ignore — scheduled list is a convenience view, not critical path.
+  }
+}
 
 (window.WHATSAPP_ACCOUNTS || []).forEach((account) => {
   const option = document.createElement("option");
@@ -763,12 +883,42 @@ messageForm.addEventListener("submit", async (e) => {
     return;
   }
 
+  const chatId = buildChatId(messagePhoneInput.value, messageIsGroupInput.checked);
+  const mode = currentMessageMode();
+
+  if (mode === "schedule") {
+    const schedule = buildMessageSchedule();
+    if (schedule.error) {
+      setMessageStatus(schedule.error, "error");
+      return;
+    }
+
+    messageSubmitBtn.disabled = true;
+    setMessageStatus("Agendando...", "");
+
+    try {
+      await scheduleMessage(messageImage, text, messageAccountSelect.value, chatId, schedule);
+      setMessageStatus("Mensagem agendada com sucesso!", "success");
+      messageForm.reset();
+      messageImage = null;
+      renderMessageImage();
+      messageSubmitBtn.textContent = "Enviar Mensagem";
+      messageScheduleFields.hidden = true;
+      messageOnceFields.hidden = false;
+      messageWeeklyFields.hidden = true;
+      loadMessageScheduledPosts();
+    } catch (err) {
+      setMessageStatus(`Falha ao agendar mensagem: ${err.message}`, "error");
+    } finally {
+      messageSubmitBtn.disabled = false;
+    }
+    return;
+  }
+
   if (!window.WEBHOOK_URL || window.WEBHOOK_URL.includes("SEU-N8N")) {
     setMessageStatus("Configure a WEBHOOK_URL em config.js antes de usar.", "error");
     return;
   }
-
-  const chatId = buildChatId(messagePhoneInput.value, messageIsGroupInput.checked);
 
   messageSubmitBtn.disabled = true;
   setMessageStatus("Enviando...", "");
