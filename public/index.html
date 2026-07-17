@@ -20,7 +20,14 @@
   </section>
 
   <section id="app" hidden>
-    <h1>Postar Status no WhatsApp</h1>
+    <h1>WhatsApp via WAHA</h1>
+
+    <div class="tabs">
+      <button type="button" class="tab-btn active" id="tab-btn-status" data-tab="status-tab">Postar Status</button>
+      <button type="button" class="tab-btn" id="tab-btn-message" data-tab="message-tab">Enviar Mensagem</button>
+    </div>
+
+    <div id="status-tab" class="tab-panel">
     <p class="subtitle">Envie uma ou mais imagens e uma legenda. Cada imagem vira um Status via WAHA.</p>
 
     <form id="post-form">
@@ -90,6 +97,39 @@
       <ul id="scheduled-list"></ul>
       <p id="scheduled-empty" hidden>Nenhum post agendado.</p>
     </section>
+    </div>
+
+    <div id="message-tab" class="tab-panel" hidden>
+      <p class="subtitle">Envie uma mensagem de texto (com imagem opcional) para um número ou grupo via WAHA.</p>
+
+      <form id="message-form">
+        <label for="message-account">Conta</label>
+        <select id="message-account" name="account"></select>
+
+        <label for="message-phone">Número do destinatário</label>
+        <input type="tel" id="message-phone" placeholder="Ex: 5511999999999" required>
+        <label class="checkbox-label"><input type="checkbox" id="message-is-group"> É um grupo (usar ID do grupo)</label>
+
+        <label class="dropzone" id="message-dropzone">
+          <input type="file" id="message-image" accept="image/*">
+          <span id="message-dropzone-text">Clique ou arraste uma imagem aqui (opcional)</span>
+        </label>
+
+        <div class="url-add-row">
+          <input type="url" id="message-image-url" placeholder="Ou cole a URL de uma imagem...">
+          <button type="button" id="message-add-url-btn">Adicionar</button>
+        </div>
+
+        <ul id="message-image-list"></ul>
+
+        <label for="message-text">Mensagem</label>
+        <textarea id="message-text" rows="4" placeholder="Escreva a mensagem..."></textarea>
+
+        <button type="submit" id="message-submit-btn">Enviar Mensagem</button>
+      </form>
+
+      <p id="message-status" role="status"></p>
+    </div>
   </section>
 </main>
 

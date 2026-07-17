@@ -297,6 +297,18 @@ function setStatus(message, type) {
   statusEl.className = type || "";
 }
 
+// ---------- Tabs ----------
+const tabButtons = document.querySelectorAll(".tab-btn");
+tabButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    tabButtons.forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelectorAll(".tab-panel").forEach((panel) => {
+      panel.hidden = panel.id !== btn.dataset.tab;
+    });
+  });
+});
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -590,4 +602,186 @@ form.addEventListener("submit", async (e) => {
   renderFileList();
   progressBar.hidden = true;
   submitBtn.disabled = false;
+});
+
+// ---------- Enviar Mensagem ----------
+const messageForm = document.getElementById("message-form");
+const messageAccountSelect = document.getElementById("message-account");
+const messagePhoneInput = document.getElementById("message-phone");
+const messageIsGroupInput = document.getElementById("message-is-group");
+const messageFileInput = document.getElementById("message-image");
+const messageDropzone = document.getElementById("message-dropzone");
+const messageDropzoneText = document.getElementById("message-dropzone-text");
+const messageImageUrlInput = document.getElementById("message-image-url");
+const messageAddUrlBtn = document.getElementById("message-add-url-btn");
+const messageImageListEl = document.getElementById("message-image-list");
+const messageTextInput = document.getElementById("message-text");
+const messageSubmitBtn = document.getElementById("message-submit-btn");
+const messageStatusEl = document.getElementById("message-status");
+
+(window.WHATSAPP_ACCOUNTS || []).forEach((account) => {
+  const option = document.createElement("option");
+  option.value = account.id;
+  option.textContent = account.label;
+  messageAccountSelect.appendChild(option);
+});
+
+let messageImage = null;
+
+function setMessageStatus(message, type) {
+  messageStatusEl.textContent = message;
+  messageStatusEl.className = type || "";
+}
+
+function renderMessageImage() {
+  messageImageListEl.innerHTML = "";
+  messageDropzoneText.hidden = messageImage !== null;
+  if (!messageImage) return;
+
+  const li = document.createElement("li");
+
+  const img = document.createElement("img");
+  img.alt = itemName(messageImage);
+  if (messageImage.type === "url") {
+    img.src = messageImage.url;
+    img.addEventListener("click", () => openLightbox(messageImage.url));
+  } else {
+    const reader = new FileReader();
+    reader.onload = () => {
+      img.src = reader.result;
+      img.addEventListener("click", () => openLightbox(reader.result));
+    };
+    reader.readAsDataURL(messageImage.file);
+  }
+
+  const name = document.createElement("span");
+  name.className = "file-name";
+  name.textContent = itemName(messageImage);
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.textContent = "✕";
+  removeBtn.addEventListener("click", () => {
+    messageImage = null;
+    renderMessageImage();
+  });
+
+  const actions = document.createElement("div");
+  actions.className = "file-actions";
+  actions.appendChild(removeBtn);
+
+  li.append(img, name, actions);
+  messageImageListEl.appendChild(li);
+}
+
+messageFileInput.addEventListener("change", () => {
+  const file = messageFileInput.files[0];
+  if (file && file.type.startsWith("image/")) {
+    messageImage = { type: "file", file };
+    renderMessageImage();
+  }
+  messageFileInput.value = "";
+});
+
+["dragover", "dragleave", "drop"].forEach((eventName) => {
+  messageDropzone.addEventListener(eventName, (e) => {
+    e.preventDefault();
+    messageDropzone.classList.toggle("dragover", eventName === "dragover");
+  });
+});
+
+messageDropzone.addEventListener("drop", (e) => {
+  const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/"));
+  if (file) {
+    messageImage = { type: "file", file };
+    renderMessageImage();
+  }
+});
+
+messageAddUrlBtn.addEventListener("click", () => {
+  const url = messageImageUrlInput.value.trim();
+  if (url) {
+    messageImage = { type: "url", url };
+    renderMessageImage();
+  }
+  messageImageUrlInput.value = "";
+});
+
+messageImageUrlInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    messageAddUrlBtn.click();
+  }
+});
+
+// Monta o chatId no formato exigido pela WAHA (@c.us para contatos, @g.us para grupos).
+function buildChatId(phone, isGroup) {
+  const digits = phone.replace(/\D/g, "");
+  return `${digits}@${isGroup ? "g.us" : "c.us"}`;
+}
+
+async function postMessage(chatId, text, image, account) {
+  const formData = new FormData();
+  formData.append("type", "message");
+  formData.append("session", account);
+  formData.append("chatId", chatId);
+  formData.append("text", text);
+
+  if (image) {
+    if (image.type === "url") {
+      formData.append("imageUrl", image.url);
+      formData.append("mimetype", guessMimeFromUrl(image.url));
+    } else {
+      const compressed = await compressImage(image.file);
+      formData.append("image", compressed, image.file.name);
+    }
+  }
+
+  const response = await fetch(window.WEBHOOK_URL, {
+    method: "POST",
+    headers: { "X-API-Key": window.API_KEY },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Webhook respondeu com status ${response.status}`);
+  }
+}
+
+messageForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const phoneDigits = messagePhoneInput.value.replace(/\D/g, "");
+  if (!phoneDigits) {
+    setMessageStatus("Informe o número do destinatário.", "error");
+    return;
+  }
+
+  const text = messageTextInput.value.trim();
+  if (!text && !messageImage) {
+    setMessageStatus("Escreva uma mensagem ou anexe uma imagem.", "error");
+    return;
+  }
+
+  if (!window.WEBHOOK_URL || window.WEBHOOK_URL.includes("SEU-N8N")) {
+    setMessageStatus("Configure a WEBHOOK_URL em config.js antes de usar.", "error");
+    return;
+  }
+
+  const chatId = buildChatId(messagePhoneInput.value, messageIsGroupInput.checked);
+
+  messageSubmitBtn.disabled = true;
+  setMessageStatus("Enviando...", "");
+
+  try {
+    await postMessage(chatId, text, messageImage, messageAccountSelect.value);
+    setMessageStatus("Mensagem enviada com sucesso!", "success");
+    messageForm.reset();
+    messageImage = null;
+    renderMessageImage();
+  } catch (err) {
+    setMessageStatus(`Falha ao enviar mensagem: ${err.message}`, "error");
+  } finally {
+    messageSubmitBtn.disabled = false;
+  }
 });
