@@ -39,7 +39,7 @@ docker build -t sis-status-post .
 docker run -p 8080:8080 --env-file .env sis-status-post
 ```
 
-Variáveis de ambiente aceitas (ver `.env.example`): `WEBHOOK_URL`, `APP_PASSWORD`, `API_KEY`, `SEND_DELAY_MS`, `WHATSAPP_ACCOUNTS_JSON` (JSON array), `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SCHEDULE_API_KEY`.
+Variáveis de ambiente aceitas (ver `.env.example`): `WEBHOOK_URL`, `APP_PASSWORD`, `API_KEY`, `SEND_DELAY_MIN_MS`, `SEND_DELAY_MAX_MS`, `WHATSAPP_ACCOUNTS_JSON` (JSON array), `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SCHEDULE_API_KEY`.
 
 ## 1. Configurar `public/config.js`
 
@@ -47,11 +47,13 @@ Variáveis de ambiente aceitas (ver `.env.example`): `WEBHOOK_URL`, `APP_PASSWOR
 window.WEBHOOK_URL = "https://SEU-N8N.exemplo.com/webhook/status-post";
 window.APP_PASSWORD = "escolha-uma-senha";
 window.API_KEY = "escolha-uma-chave-longa-e-aleatoria";
-window.SEND_DELAY_MS = 1500;
+window.SEND_DELAY_MIN_MS = 15000;
+window.SEND_DELAY_MAX_MS = 45000;
 ```
 
 - `APP_PASSWORD` é uma proteção básica só no navegador (evita acesso casual). **Não é segurança real** — qualquer um que veja o JS consegue ler o valor.
 - `API_KEY` é a proteção que importa de verdade: é enviada no header `X-API-Key` em toda requisição e validada pelo próprio node Webhook do n8n (Header Auth, passo 1 abaixo).
+- `SEND_DELAY_MIN_MS` / `SEND_DELAY_MAX_MS` definem o intervalo (em ms) entre a publicação de cada imagem: a cada envio, um valor aleatório é sorteado dentro dessa faixa. Isso evita um padrão de tempo fixo e previsível entre posts, o que reduz o risco de a conta ser sinalizada como automação pelo WhatsApp. Quanto maior a faixa e o mínimo, mais "humano" o ritmo — para lotes grandes de imagens, considere valores ainda maiores (ex.: 60000–180000).
 
 ## 2. Montar o workflow no n8n
 
@@ -84,8 +86,9 @@ window.SEND_DELAY_MS = 1500;
 ## Comportamento da página
 
 - Aceita várias imagens de uma vez; cada uma pode ser removida ou reordenada antes de publicar.
+- Cada imagem pode ter sua **própria legenda**, digitada abaixo da miniatura na lista; se deixada em branco, usa a legenda padrão do campo principal.
 - Cada imagem é comprimida no navegador (máx. 1600px, JPEG ~82% de qualidade) antes do upload, para acelerar o envio.
-- As imagens são enviadas **uma de cada vez**, respeitando a ordem da lista, com um intervalo (`SEND_DELAY_MS`) entre elas para não postar rápido demais no WhatsApp.
+- As imagens são enviadas **uma de cada vez**, respeitando a ordem da lista, com um intervalo **aleatório** (`SEND_DELAY_MIN_MS`–`SEND_DELAY_MAX_MS`) entre elas — reduz o risco de a conta ser identificada como automação/banida por postar rápido e em ritmo constante demais.
 - Barra de progresso mostra quantas já foram publicadas.
 
 ## Múltiplas contas

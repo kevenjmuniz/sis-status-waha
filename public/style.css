@@ -217,13 +217,30 @@ button:disabled {
   flex-shrink: 0;
 }
 
+.file-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
 #file-list .file-name,
 #message-image-list .file-name {
-  flex: 1;
   font-size: 0.85rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.file-caption {
+  width: 100%;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
 }
 
 #file-list .file-actions,

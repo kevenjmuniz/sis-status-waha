@@ -12,8 +12,12 @@ window.APP_PASSWORD = "escolha-uma-senha";
 // Configure o MESMO valor num node de validação no n8n (ver README).
 window.API_KEY = "escolha-uma-chave-longa-e-aleatoria";
 
-// Intervalo (ms) entre o envio de cada imagem, para não postar rápido demais.
-window.SEND_DELAY_MS = 1500;
+// Intervalo aleatório (ms) entre o envio de cada imagem — um valor sorteado entre
+// MIN e MAX a cada imagem, para não postar em ritmo constante/rápido demais
+// (padrão que serviços de detecção de bot reconhecem). Recomendado manter
+// pelo menos alguns segundos de diferença entre MIN e MAX.
+window.SEND_DELAY_MIN_MS = 15000;
+window.SEND_DELAY_MAX_MS = 45000;
 
 // Contas/sessões WAHA disponíveis para escolher na página.
 // "id" deve ser exatamente o nome da sessão configurada no WAHA/n8n.

@@ -133,6 +133,10 @@ function itemName(item) {
   return item.type === "url" ? item.url : item.file.name;
 }
 
+function effectiveCaption(item) {
+  return item.caption && item.caption.trim() ? item.caption : captionInput.value;
+}
+
 function urlBasename(url) {
   try {
     const path = new URL(url).pathname;
@@ -199,9 +203,23 @@ function renderFileList() {
       reader.readAsDataURL(item.file);
     }
 
+    const info = document.createElement("div");
+    info.className = "file-info";
+
     const name = document.createElement("span");
     name.className = "file-name";
     name.textContent = itemName(item);
+
+    const captionField = document.createElement("input");
+    captionField.type = "text";
+    captionField.className = "file-caption";
+    captionField.placeholder = "Legenda desta imagem (opcional, usa a padrão se vazio)";
+    captionField.value = item.caption || "";
+    captionField.addEventListener("input", () => {
+      item.caption = captionField.value;
+    });
+
+    info.append(name, captionField);
 
     const actions = document.createElement("div");
     actions.className = "file-actions";
@@ -233,7 +251,7 @@ function renderFileList() {
     });
 
     actions.append(upBtn, downBtn, removeBtn);
-    li.append(img, name, actions);
+    li.append(img, info, actions);
     fileListEl.appendChild(li);
   });
 }
@@ -312,6 +330,15 @@ tabButtons.forEach((btn) => {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Delay aleatório entre publicações — evita o padrão de intervalo fixo que
+// serviços de detecção de automação (WhatsApp) reconhecem como comportamento de bot.
+function randomSendDelay() {
+  const min = Number(window.SEND_DELAY_MIN_MS ?? 15000);
+  const max = Number(window.SEND_DELAY_MAX_MS ?? 45000);
+  if (!(max > min)) return min;
+  return min + Math.random() * (max - min);
 }
 
 // Downscales large images client-side before upload to keep requests fast and light.
@@ -582,7 +609,7 @@ form.addEventListener("submit", async (e) => {
     for (let i = 0; i < total; i++) {
       setStatus(`Agendando ${i + 1} de ${total}...`, "");
       try {
-        await scheduleImage(selectedFiles[i], captionInput.value, accountSelect.value, schedule);
+        await scheduleImage(selectedFiles[i], effectiveCaption(selectedFiles[i]), accountSelect.value, schedule);
         successCount++;
         progressFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
       } catch (err) {
@@ -621,7 +648,7 @@ form.addEventListener("submit", async (e) => {
   for (let i = 0; i < total; i++) {
     setStatus(`Enviando ${i + 1} de ${total}...`, "");
     try {
-      await postImage(selectedFiles[i], captionInput.value, accountSelect.value);
+      await postImage(selectedFiles[i], effectiveCaption(selectedFiles[i]), accountSelect.value);
       successCount++;
       progressFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
     } catch (err) {
@@ -631,7 +658,9 @@ form.addEventListener("submit", async (e) => {
     }
 
     if (i < total - 1) {
-      await sleep(window.SEND_DELAY_MS || 0);
+      const delay = randomSendDelay();
+      setStatus(`Aguardando ${Math.round(delay / 1000)}s antes da próxima (anti-ban)...`, "");
+      await sleep(delay);
     }
   }
 
