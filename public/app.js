@@ -434,13 +434,17 @@ async function postImage(item, caption, account) {
   return extractMessageId(response);
 }
 
-// O node WAHA no n8n responde com { key: { id, ... }, message: {...} } — esse id
-// é o que a API de exclusão de status da WAHA exige para apagar o post depois.
+// O node WAHA no n8n responde com { id: "true_status@broadcast_<ID>_<participant>@c.us", ... }
+// — um id composto (fromMe_remoteJid_id_participant). A API de exclusão de status da WAHA
+// espera só o segmento do meio (o id da mensagem em si).
 async function extractMessageId(response) {
   try {
     const data = await response.clone().json();
     const first = Array.isArray(data) ? data[0] : data;
-    return first?.key?.id || null;
+    const rawId = first?.id || first?.key?.id;
+    if (!rawId) return null;
+    const parts = rawId.split("_");
+    return parts.length >= 3 ? parts[2] : rawId;
   } catch {
     return null;
   }
