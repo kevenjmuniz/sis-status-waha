@@ -34,6 +34,7 @@ const server = http.createServer((req, res) => {
       "X-Frame-Options": "DENY",
       "Referrer-Policy": "no-referrer",
       "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; connect-src *; style-src 'self' 'unsafe-inline'; script-src 'self'",
+      "Cache-Control": "no-cache",
     });
     res.end(data);
   });
