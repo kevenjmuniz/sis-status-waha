@@ -83,6 +83,25 @@ window.SEND_DELAY_MAX_MS = 45000;
 
 > Pré-requisito: instância WAHA com sessão autenticada (`WORKING`) e o node comunitário do WAHA instalado no n8n (`n8n-nodes-waha`).
 
+### Apagar um status publicado
+
+A página guarda o `key.id` que a WAHA devolve ao publicar (é o que a resposta do node "Send Image Status" já traz, sem configuração extra) e usa esse id para apagar o status depois, via `POST /api/{session}/status/delete` da própria WAHA (ver [docs da WAHA](https://waha.devlike.pro)).
+
+No mesmo workflow do passo 2, seu Webhook precisa rotear por `body.type` (um Switch/IF antes do node WAHA), com um ramo novo para quando `type` for `status-delete`:
+
+- **HTTP Request** (ou node WAHA, se a versão instalada tiver a operação "Delete Status")
+  - Method: `POST`
+  - URL: `{{ SUA_URL_WAHA }}/api/{{ $json.body.session }}/status/delete`
+  - Headers: os mesmos usados pelo node WAHA para autenticar na sua instância (normalmente `X-Api-Key`)
+  - Body (JSON): `{ "id": "{{ $json.body.id }}" }`
+
+Sem esse ramo configurado, o botão "Apagar do WhatsApp" na seção "Publicados recentemente" vai falhar — nesse caso a página ainda mostra "Já apaguei" como alternativa manual para itens sem `message_id` salvo.
+
+Para posts **agendados** também aparecerem com o botão de apagar de verdade, no 2º workflow (seção "Agendamento de posts" abaixo) capture o `key.id` da resposta do node WAHA e passe como `message_id` na chamada de `mark_scheduled_post_sent`:
+```
+Body: { "post_id": "{{ $('HTTP Request').item.json.id }}", "message_id": "{{ $json.key.id }}" }
+```
+
 ## Comportamento da página
 
 - Aceita várias imagens de uma vez; cada uma pode ser removida ou reordenada antes de publicar.
@@ -91,7 +110,7 @@ window.SEND_DELAY_MAX_MS = 45000;
 - As imagens são enviadas **uma de cada vez**, respeitando a ordem da lista, com um intervalo **aleatório** (`SEND_DELAY_MIN_MS`–`SEND_DELAY_MAX_MS`) entre elas — reduz o risco de a conta ser identificada como automação/banida por postar rápido e em ritmo constante demais.
 - Barra de progresso mostra quantas já foram publicadas.
 - Botão **Cancelar** aparece durante a publicação: interrompe antes da próxima imagem (inclusive durante a espera do intervalo anti-ban). Imagens já publicadas continuam publicadas — cancelar só impede o restante do lote.
-- Seção **Publicados recentemente** lista os últimos status publicados (imagem, conta, data/hora), com botão "Já apaguei" para tirar da lista depois que você apagar manualmente no WhatsApp. Usa a tabela `posted_history` no mesmo projeto Supabase do agendamento — também é alimentada automaticamente quando um post agendado é enviado pelo n8n.
+- Seção **Publicados recentemente** lista os últimos status publicados (imagem, conta, data/hora). Quando o `message_id` foi capturado no envio, o botão **"Apagar do WhatsApp"** chama a API de exclusão da WAHA de verdade; sem `message_id`, mostra "Já apaguei" (só tira da lista, apagar continua manual). Usa a tabela `posted_history` no mesmo projeto Supabase do agendamento — também é alimentada automaticamente quando um post agendado é enviado pelo n8n (ver "Apagar um status publicado" acima).
 
 ## Múltiplas contas
 
@@ -147,7 +166,7 @@ Pegue a **service_role key** do projeto em Supabase → Project Settings → API
    - Method: `POST`
    - URL: `https://lhtcvmpvdoqelhfdbldn.supabase.co/rest/v1/rpc/mark_scheduled_post_sent`
    - Headers: iguais ao passo 2
-   - Body: `{ "post_id": "{{ $('HTTP Request').item.json.id }}" }` (ajuste o nome do node de referência conforme o passo 2)
+   - Body: `{ "post_id": "{{ $('HTTP Request').item.json.id }}", "message_id": "{{ $json.key.id }}" }` (ajuste o nome do node de referência conforme o passo 2; `message_id` é opcional — sem ele, o post aparece em "Publicados recentemente" só com a opção "Já apaguei" manual, em vez do apagar automático)
 
 - Posts **"Uma vez"** somem da lista de pendentes depois de enviados (status vira `sent`).
 - Posts **recorrentes** continuam `pending` para sempre — o `last_sent_at` impede que sejam reenviados duas vezes no mesmo dia, mas eles disparam de novo automaticamente no próximo dia/horário configurado.

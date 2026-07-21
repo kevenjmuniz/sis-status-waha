@@ -430,6 +430,37 @@ async function postImage(item, caption, account) {
   if (!response.ok) {
     throw new Error(`Webhook respondeu com status ${response.status}`);
   }
+
+  return extractMessageId(response);
+}
+
+// O node WAHA no n8n responde com { key: { id, ... }, message: {...} } — esse id
+// é o que a API de exclusão de status da WAHA exige para apagar o post depois.
+async function extractMessageId(response) {
+  try {
+    const data = await response.clone().json();
+    const first = Array.isArray(data) ? data[0] : data;
+    return first?.key?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+async function deleteWhatsappStatus(messageId, account) {
+  const formData = new FormData();
+  formData.append("type", "status-delete");
+  formData.append("session", account);
+  formData.append("id", messageId);
+
+  const response = await fetch(window.WEBHOOK_URL, {
+    method: "POST",
+    headers: { "X-API-Key": window.API_KEY },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Webhook respondeu com status ${response.status}`);
+  }
 }
 
 function fileToBase64(file) {
@@ -479,7 +510,7 @@ async function insertPostedHistory(row) {
   });
 }
 
-async function logPostedHistory(item, caption, account) {
+async function logPostedHistory(item, caption, account, messageId) {
   try {
     const imageFields = await buildHistoryImageFields(item);
     await insertPostedHistory({
@@ -487,6 +518,7 @@ async function logPostedHistory(item, caption, account) {
       post_type: "status",
       source: "immediate",
       caption,
+      message_id: messageId || null,
       ...imageFields,
     });
   } catch {
@@ -501,6 +533,11 @@ async function markHistoryDeleted(id, reloadFn) {
     body: JSON.stringify({ deleted: true }),
   });
   reloadFn();
+}
+
+async function deleteAndMarkHistory(post, reloadFn) {
+  await deleteWhatsappStatus(post.message_id, post.account_id);
+  await markHistoryDeleted(post.id, reloadFn);
 }
 
 async function loadPostedHistory() {
@@ -534,8 +571,23 @@ async function loadPostedHistory() {
 
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
-      deleteBtn.textContent = "Já apaguei";
-      deleteBtn.addEventListener("click", () => markHistoryDeleted(post.id, loadPostedHistory));
+
+      if (post.message_id) {
+        deleteBtn.textContent = "Apagar do WhatsApp";
+        deleteBtn.addEventListener("click", async () => {
+          if (!(await askConfirm("Apagar este status do WhatsApp agora?"))) return;
+          deleteBtn.disabled = true;
+          try {
+            await deleteAndMarkHistory(post, loadPostedHistory);
+          } catch (err) {
+            deleteBtn.disabled = false;
+            setStatus(`Falha ao apagar do WhatsApp: ${err.message}`, "error");
+          }
+        });
+      } else {
+        deleteBtn.textContent = "Já apaguei";
+        deleteBtn.addEventListener("click", () => markHistoryDeleted(post.id, loadPostedHistory));
+      }
 
       li.append(img, info, deleteBtn);
       postedListEl.appendChild(li);
@@ -755,9 +807,9 @@ form.addEventListener("submit", async (e) => {
     setStatus(`Enviando ${i + 1} de ${total}...`, "");
     try {
       const caption = effectiveCaption(selectedFiles[i]);
-      await postImage(selectedFiles[i], caption, accountSelect.value);
+      const messageId = await postImage(selectedFiles[i], caption, accountSelect.value);
       successCount++;
-      publishedItems.push({ item: selectedFiles[i], caption });
+      publishedItems.push({ item: selectedFiles[i], caption, messageId });
       progressFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
     } catch (err) {
       setStatus(`Falha ao publicar "${itemName(selectedFiles[i])}": ${err.message}`, "error");
@@ -776,8 +828,8 @@ form.addEventListener("submit", async (e) => {
   cancelBtn.hidden = true;
 
   if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
-    for (const { item, caption } of publishedItems) {
-      await logPostedHistory(item, caption, accountSelect.value);
+    for (const { item, caption, messageId } of publishedItems) {
+      await logPostedHistory(item, caption, accountSelect.value, messageId);
     }
     loadPostedHistory();
   }
