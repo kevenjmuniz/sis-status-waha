@@ -90,6 +90,8 @@ window.SEND_DELAY_MAX_MS = 45000;
 - Cada imagem é comprimida no navegador (máx. 1600px, JPEG ~82% de qualidade) antes do upload, para acelerar o envio.
 - As imagens são enviadas **uma de cada vez**, respeitando a ordem da lista, com um intervalo **aleatório** (`SEND_DELAY_MIN_MS`–`SEND_DELAY_MAX_MS`) entre elas — reduz o risco de a conta ser identificada como automação/banida por postar rápido e em ritmo constante demais.
 - Barra de progresso mostra quantas já foram publicadas.
+- Botão **Cancelar** aparece durante a publicação: interrompe antes da próxima imagem (inclusive durante a espera do intervalo anti-ban). Imagens já publicadas continuam publicadas — cancelar só impede o restante do lote.
+- Seção **Publicados recentemente** lista os últimos status publicados (imagem, conta, data/hora), com botão "Já apaguei" para tirar da lista depois que você apagar manualmente no WhatsApp. Usa a tabela `posted_history` no mesmo projeto Supabase do agendamento — também é alimentada automaticamente quando um post agendado é enviado pelo n8n.
 
 ## Múltiplas contas
 

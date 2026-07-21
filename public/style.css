@@ -393,7 +393,8 @@ button:disabled {
 }
 
 #scheduled-list,
-#message-scheduled-list {
+#message-scheduled-list,
+#posted-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -403,7 +404,8 @@ button:disabled {
 }
 
 #scheduled-list li,
-#message-scheduled-list li {
+#message-scheduled-list li,
+#posted-list li {
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -413,7 +415,8 @@ button:disabled {
 }
 
 #scheduled-list img,
-#message-scheduled-list img {
+#message-scheduled-list img,
+#posted-list img {
   width: 40px;
   height: 40px;
   object-fit: cover;
@@ -422,14 +425,16 @@ button:disabled {
 }
 
 #scheduled-list .scheduled-info,
-#message-scheduled-list .scheduled-info {
+#message-scheduled-list .scheduled-info,
+#posted-list .scheduled-info {
   flex: 1;
   font-size: 0.8rem;
   color: var(--muted);
 }
 
 #scheduled-list .scheduled-info strong,
-#message-scheduled-list .scheduled-info strong {
+#message-scheduled-list .scheduled-info strong,
+#posted-list .scheduled-info strong {
   display: block;
   color: var(--text);
   font-size: 0.85rem;
@@ -445,8 +450,18 @@ button:disabled {
   color: #dc2626;
 }
 
+#posted-list button {
+  width: auto;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
 #scheduled-empty,
-#message-scheduled-empty {
+#message-scheduled-empty,
+#posted-empty {
   color: var(--muted);
   font-size: 0.85rem;
 }
@@ -454,7 +469,8 @@ button:disabled {
 #file-list img,
 #scheduled-list img,
 #message-image-list img,
-#message-scheduled-list img {
+#message-scheduled-list img,
+#posted-list img {
   cursor: zoom-in;
 }
 
@@ -508,6 +524,15 @@ button:disabled {
 .modal-box p {
   margin: 0 0 1.25rem;
   font-size: 0.95rem;
+}
+
+.submit-row {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.submit-row button {
+  flex: 1;
 }
 
 .modal-actions {

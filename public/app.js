@@ -13,6 +13,7 @@ function unlockApp() {
   if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
     loadScheduledPosts();
     loadMessageScheduledPosts();
+    loadPostedHistory();
   }
 }
 
@@ -42,9 +43,12 @@ const imageUrlInput = document.getElementById("image-url");
 const addUrlBtn = document.getElementById("add-url-btn");
 const captionInput = document.getElementById("caption");
 const submitBtn = document.getElementById("submit-btn");
+const cancelBtn = document.getElementById("cancel-btn");
 const statusEl = document.getElementById("status");
 const progressBar = document.getElementById("progress-bar");
 const progressFill = document.getElementById("progress-fill");
+const postedListEl = document.getElementById("posted-list");
+const postedEmptyEl = document.getElementById("posted-empty");
 
 const modeRadios = document.querySelectorAll('input[name="mode"]');
 const scheduleFields = document.getElementById("schedule-fields");
@@ -341,6 +345,19 @@ function randomSendDelay() {
   return min + Math.random() * (max - min);
 }
 
+let publishCanceled = false;
+
+// Igual a sleep(), mas verifica a cada 250ms se o usuário cancelou a publicação,
+// para o botão "Cancelar" interromper mesmo durante o intervalo entre imagens.
+async function cancellableSleep(ms) {
+  const step = 250;
+  let remaining = ms;
+  while (remaining > 0 && !publishCanceled) {
+    await sleep(Math.min(step, remaining));
+    remaining -= step;
+  }
+}
+
 // Downscales large images client-side before upload to keep requests fast and light.
 function compressImage(file, maxDimension = 1600, quality = 0.82) {
   return new Promise((resolve, reject) => {
@@ -442,6 +459,89 @@ async function insertScheduledPost(row) {
 
   if (!response.ok) {
     throw new Error(`Supabase respondeu com status ${response.status}`);
+  }
+}
+
+async function buildHistoryImageFields(item) {
+  if (item.type === "url") {
+    return { image_url: item.url, image_filename: urlBasename(item.url) };
+  }
+  const thumb = await compressImage(item.file, 200, 0.6);
+  const base64 = await fileToBase64(thumb);
+  return { image_data: base64, image_mimetype: thumb.type, image_filename: item.file.name };
+}
+
+async function insertPostedHistory(row) {
+  await fetch(`${window.SUPABASE_URL}/rest/v1/posted_history`, {
+    method: "POST",
+    headers: supabaseHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(row),
+  });
+}
+
+async function logPostedHistory(item, caption, account) {
+  try {
+    const imageFields = await buildHistoryImageFields(item);
+    await insertPostedHistory({
+      account_id: account,
+      post_type: "status",
+      source: "immediate",
+      caption,
+      ...imageFields,
+    });
+  } catch {
+    // Histórico é só conveniência — uma falha aqui não deve travar a publicação.
+  }
+}
+
+async function markHistoryDeleted(id, reloadFn) {
+  await fetch(`${window.SUPABASE_URL}/rest/v1/posted_history?id=eq.${id}`, {
+    method: "PATCH",
+    headers: supabaseHeaders({ "Content-Type": "application/json", Prefer: "return=minimal" }),
+    body: JSON.stringify({ deleted: true }),
+  });
+  reloadFn();
+}
+
+async function loadPostedHistory() {
+  try {
+    const response = await fetch(
+      `${window.SUPABASE_URL}/rest/v1/posted_history?deleted=eq.false&post_type=eq.status&order=posted_at.desc&limit=30`,
+      { headers: supabaseHeaders() }
+    );
+    if (!response.ok) return;
+
+    const posts = await response.json();
+    postedListEl.innerHTML = "";
+    postedEmptyEl.hidden = posts.length > 0;
+
+    posts.forEach((post) => {
+      const li = document.createElement("li");
+
+      const img = document.createElement("img");
+      const imgSrc = post.image_url || `data:${post.image_mimetype};base64,${post.image_data}`;
+      img.src = imgSrc;
+      img.alt = post.image_filename || "Imagem publicada";
+      img.addEventListener("click", () => openLightbox(imgSrc));
+
+      const info = document.createElement("div");
+      info.className = "scheduled-info";
+      const accountLabel =
+        (window.WHATSAPP_ACCOUNTS || []).find((a) => a.id === post.account_id)?.label || post.account_id;
+      const accountStrong = document.createElement("strong");
+      accountStrong.textContent = accountLabel;
+      info.append(accountStrong, document.createTextNode(new Date(post.posted_at).toLocaleString("pt-BR")));
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.textContent = "Já apaguei";
+      deleteBtn.addEventListener("click", () => markHistoryDeleted(post.id, loadPostedHistory));
+
+      li.append(img, info, deleteBtn);
+      postedListEl.appendChild(li);
+    });
+  } catch {
+    // Silently ignore — histórico é uma visão de conveniência, não crítica.
   }
 }
 
@@ -641,35 +741,62 @@ form.addEventListener("submit", async (e) => {
   submitBtn.disabled = true;
   progressBar.hidden = false;
   progressFill.style.width = "0%";
+  publishCanceled = false;
+  cancelBtn.hidden = false;
+  cancelBtn.disabled = false;
 
   const total = selectedFiles.length;
+  const publishedItems = [];
   let successCount = 0;
 
   for (let i = 0; i < total; i++) {
+    if (publishCanceled) break;
+
     setStatus(`Enviando ${i + 1} de ${total}...`, "");
     try {
-      await postImage(selectedFiles[i], effectiveCaption(selectedFiles[i]), accountSelect.value);
+      const caption = effectiveCaption(selectedFiles[i]);
+      await postImage(selectedFiles[i], caption, accountSelect.value);
       successCount++;
+      publishedItems.push({ item: selectedFiles[i], caption });
       progressFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
     } catch (err) {
       setStatus(`Falha ao publicar "${itemName(selectedFiles[i])}": ${err.message}`, "error");
       submitBtn.disabled = false;
+      cancelBtn.hidden = true;
       return;
     }
 
-    if (i < total - 1) {
+    if (i < total - 1 && !publishCanceled) {
       const delay = randomSendDelay();
       setStatus(`Aguardando ${Math.round(delay / 1000)}s antes da próxima (anti-ban)...`, "");
-      await sleep(delay);
+      await cancellableSleep(delay);
     }
   }
 
-  setStatus(`${successCount} status publicado(s) com sucesso!`, "success");
+  cancelBtn.hidden = true;
+
+  if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
+    for (const { item, caption } of publishedItems) {
+      await logPostedHistory(item, caption, accountSelect.value);
+    }
+    loadPostedHistory();
+  }
+
+  if (publishCanceled) {
+    setStatus(`Publicação cancelada — ${successCount} de ${total} imagem(ns) publicada(s).`, successCount > 0 ? "success" : "");
+  } else {
+    setStatus(`${successCount} status publicado(s) com sucesso!`, "success");
+  }
   form.reset();
   selectedFiles = [];
   renderFileList();
   progressBar.hidden = true;
   submitBtn.disabled = false;
+});
+
+cancelBtn.addEventListener("click", () => {
+  publishCanceled = true;
+  cancelBtn.disabled = true;
 });
 
 // ---------- Enviar Mensagem ----------

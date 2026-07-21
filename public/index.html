@@ -83,7 +83,10 @@
         </div>
       </div>
 
-      <button type="submit" id="submit-btn">Publicar Status</button>
+      <div class="submit-row">
+        <button type="submit" id="submit-btn">Publicar Status</button>
+        <button type="button" id="cancel-btn" class="btn-secondary" hidden>Cancelar</button>
+      </div>
 
       <div id="progress-bar" hidden>
         <div id="progress-fill"></div>
@@ -96,6 +99,13 @@
       <h2>Agendados</h2>
       <ul id="scheduled-list"></ul>
       <p id="scheduled-empty" hidden>Nenhum post agendado.</p>
+    </section>
+
+    <section id="posted-section">
+      <h2>Publicados recentemente</h2>
+      <p class="subtitle">Use para conferir o que já foi postado e apagar manualmente no WhatsApp, se precisar.</p>
+      <ul id="posted-list"></ul>
+      <p id="posted-empty" hidden>Nenhum status publicado ainda.</p>
     </section>
     </div>
 
