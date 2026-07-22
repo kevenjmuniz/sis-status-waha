@@ -28,6 +28,8 @@
     </div>
 
     <div id="status-tab" class="tab-panel">
+    <div class="layout">
+    <div class="panel-main">
     <p class="subtitle">Envie uma ou mais imagens e uma legenda. Cada imagem vira um Status via WAHA.</p>
 
     <form id="post-form">
@@ -94,7 +96,9 @@
     </form>
 
     <p id="status" role="status"></p>
+    </div>
 
+    <div class="panel-side">
     <section id="scheduled-section">
       <h2>Agendados</h2>
       <ul id="scheduled-list"></ul>
@@ -108,17 +112,22 @@
       <p id="posted-empty" hidden>Nenhum status publicado ainda.</p>
     </section>
     </div>
+    </div>
+    </div>
 
     <div id="message-tab" class="tab-panel" hidden>
+      <div class="layout">
+      <div class="panel-main">
       <p class="subtitle">Envie uma mensagem de texto (com imagem opcional) para um número ou grupo via WAHA.</p>
 
       <form id="message-form">
         <label for="message-account">Conta</label>
         <select id="message-account" name="account"></select>
 
-        <label for="message-phone">Número do destinatário</label>
-        <input type="tel" id="message-phone" placeholder="Ex: 5511999999999" required>
-        <label class="checkbox-label"><input type="checkbox" id="message-is-group"> É um grupo (usar ID do grupo)</label>
+        <label for="message-phone">Número(s) do destinatário</label>
+        <textarea id="message-phone" rows="3" placeholder="Ex: 5511999999999&#10;Um número por linha (ou separados por vírgula) para enviar em lote" required></textarea>
+        <p class="field-hint" id="message-phone-count"></p>
+        <label class="checkbox-label"><input type="checkbox" id="message-is-group"> São grupos (usar ID do grupo)</label>
 
         <label class="dropzone" id="message-dropzone">
           <input type="file" id="message-image" accept="image/*">
@@ -169,16 +178,27 @@
           </div>
         </div>
 
-        <button type="submit" id="message-submit-btn">Enviar Mensagem</button>
+        <div class="submit-row">
+          <button type="submit" id="message-submit-btn">Enviar Mensagem</button>
+          <button type="button" id="message-cancel-btn" class="btn-secondary" hidden>Cancelar</button>
+        </div>
+
+        <div id="message-progress-bar" hidden>
+          <div id="message-progress-fill"></div>
+        </div>
       </form>
 
       <p id="message-status" role="status"></p>
+      </div>
 
+      <div class="panel-side">
       <section id="message-scheduled-section">
         <h2>Agendados</h2>
         <ul id="message-scheduled-list"></ul>
         <p id="message-scheduled-empty" hidden>Nenhuma mensagem agendada.</p>
       </section>
+      </div>
+      </div>
     </div>
   </section>
 </main>

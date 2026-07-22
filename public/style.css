@@ -42,9 +42,50 @@ main {
   padding: 2rem;
 }
 
+main:has(#app:not([hidden])) {
+  max-width: 1180px;
+  padding: 2.5rem;
+}
+
 h1 {
   font-size: 1.4rem;
   margin: 0 0 0.25rem;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 480px) 1fr;
+  align-items: start;
+  gap: 2.5rem;
+}
+
+.panel-main {
+  min-width: 0;
+}
+
+.panel-side {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  position: sticky;
+  top: 2rem;
+}
+
+@media (max-width: 900px) {
+  main:has(#app:not([hidden])) {
+    max-width: 640px;
+    padding: 1.5rem;
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .panel-side {
+    position: static;
+  }
 }
 
 .subtitle {
@@ -263,18 +304,38 @@ button:disabled {
   background: var(--border);
 }
 
-#progress-bar {
+#progress-bar,
+#message-progress-bar {
   height: 8px;
   border-radius: 4px;
   background: var(--border);
   overflow: hidden;
 }
 
-#progress-fill {
+#progress-fill,
+#message-progress-fill {
   height: 100%;
   width: 0%;
   background: var(--accent);
   transition: width 0.2s ease;
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: -0.5rem 0 0;
+}
+
+#message-phone {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  resize: vertical;
+  background: transparent;
+  color: var(--text);
 }
 
 .tabs {
@@ -380,14 +441,17 @@ button:disabled {
 }
 
 #scheduled-section,
-#message-scheduled-section {
-  margin-top: 1.5rem;
-  border-top: 1px solid var(--border);
-  padding-top: 1rem;
+#message-scheduled-section,
+#posted-section {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.1rem 1.25rem;
+  background: var(--bg);
 }
 
 #scheduled-section h2,
-#message-scheduled-section h2 {
+#message-scheduled-section h2,
+#posted-section h2 {
   font-size: 1rem;
   margin: 0 0 0.75rem;
 }

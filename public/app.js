@@ -347,12 +347,12 @@ function randomSendDelay() {
 
 let publishCanceled = false;
 
-// Igual a sleep(), mas verifica a cada 250ms se o usuário cancelou a publicação,
-// para o botão "Cancelar" interromper mesmo durante o intervalo entre imagens.
-async function cancellableSleep(ms) {
+// Igual a sleep(), mas verifica a cada 250ms se o usuário cancelou a publicação/envio,
+// para o botão "Cancelar" interromper mesmo durante o intervalo entre imagens/mensagens.
+async function cancellableSleep(ms, isCanceled = () => publishCanceled) {
   const step = 250;
   let remaining = ms;
-  while (remaining > 0 && !publishCanceled) {
+  while (remaining > 0 && !isCanceled()) {
     await sleep(Math.min(step, remaining));
     remaining -= step;
   }
@@ -868,6 +868,10 @@ const messageAddUrlBtn = document.getElementById("message-add-url-btn");
 const messageImageListEl = document.getElementById("message-image-list");
 const messageTextInput = document.getElementById("message-text");
 const messageSubmitBtn = document.getElementById("message-submit-btn");
+const messageCancelBtn = document.getElementById("message-cancel-btn");
+const messageProgressBar = document.getElementById("message-progress-bar");
+const messageProgressFill = document.getElementById("message-progress-fill");
+const messagePhoneCountEl = document.getElementById("message-phone-count");
 const messageStatusEl = document.getElementById("message-status");
 
 const messageModeRadios = document.querySelectorAll('input[name="message-mode"]');
@@ -1053,6 +1057,22 @@ function buildChatId(phone, isGroup) {
   return `${digits}@${isGroup ? "g.us" : "c.us"}`;
 }
 
+// Aceita um número por linha ou separados por vírgula/ponto-e-vírgula, para envio em lote.
+function parsePhoneList(raw) {
+  return raw
+    .split(/[\n,;]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+let messagePublishCanceled = false;
+
+messagePhoneInput.addEventListener("input", () => {
+  const count = parsePhoneList(messagePhoneInput.value).length;
+  messagePhoneCountEl.textContent =
+    count > 1 ? `${count} destinatários — serão enviados em lote com intervalo anti-ban.` : "";
+});
+
 async function postMessage(chatId, text, image, account) {
   const formData = new FormData();
   formData.append("type", "message");
@@ -1081,12 +1101,17 @@ async function postMessage(chatId, text, image, account) {
   }
 }
 
+messageCancelBtn.addEventListener("click", () => {
+  messagePublishCanceled = true;
+  messageCancelBtn.disabled = true;
+});
+
 messageForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const phoneDigits = messagePhoneInput.value.replace(/\D/g, "");
-  if (!phoneDigits) {
-    setMessageStatus("Informe o número do destinatário.", "error");
+  const phones = parsePhoneList(messagePhoneInput.value);
+  if (phones.length === 0) {
+    setMessageStatus("Informe ao menos um número de destinatário.", "error");
     return;
   }
 
@@ -1096,7 +1121,7 @@ messageForm.addEventListener("submit", async (e) => {
     return;
   }
 
-  const chatId = buildChatId(messagePhoneInput.value, messageIsGroupInput.checked);
+  const chatIds = phones.map((phone) => buildChatId(phone, messageIsGroupInput.checked));
   const mode = currentMessageMode();
 
   if (mode === "schedule") {
@@ -1107,24 +1132,36 @@ messageForm.addEventListener("submit", async (e) => {
     }
 
     messageSubmitBtn.disabled = true;
-    setMessageStatus("Agendando...", "");
 
-    try {
-      await scheduleMessage(messageImage, text, messageAccountSelect.value, chatId, schedule);
-      setMessageStatus("Mensagem agendada com sucesso!", "success");
-      messageForm.reset();
-      messageImage = null;
-      renderMessageImage();
-      messageSubmitBtn.textContent = "Enviar Mensagem";
-      messageScheduleFields.hidden = true;
-      messageOnceFields.hidden = false;
-      messageWeeklyFields.hidden = true;
-      loadMessageScheduledPosts();
-    } catch (err) {
-      setMessageStatus(`Falha ao agendar mensagem: ${err.message}`, "error");
-    } finally {
-      messageSubmitBtn.disabled = false;
+    const total = chatIds.length;
+    let successCount = 0;
+
+    for (let i = 0; i < total; i++) {
+      setMessageStatus(total > 1 ? `Agendando ${i + 1} de ${total}...` : "Agendando...", "");
+      try {
+        await scheduleMessage(messageImage, text, messageAccountSelect.value, chatIds[i], schedule);
+        successCount++;
+      } catch (err) {
+        setMessageStatus(`Falha ao agendar para "${phones[i]}": ${err.message}`, "error");
+        messageSubmitBtn.disabled = false;
+        return;
+      }
     }
+
+    setMessageStatus(
+      total > 1 ? `${successCount} mensagem(ns) agendada(s) com sucesso!` : "Mensagem agendada com sucesso!",
+      "success"
+    );
+    messageForm.reset();
+    messageImage = null;
+    renderMessageImage();
+    messagePhoneCountEl.textContent = "";
+    messageSubmitBtn.textContent = "Enviar Mensagem";
+    messageScheduleFields.hidden = true;
+    messageOnceFields.hidden = false;
+    messageWeeklyFields.hidden = true;
+    messageSubmitBtn.disabled = false;
+    loadMessageScheduledPosts();
     return;
   }
 
@@ -1134,17 +1171,61 @@ messageForm.addEventListener("submit", async (e) => {
   }
 
   messageSubmitBtn.disabled = true;
-  setMessageStatus("Enviando...", "");
+  messagePublishCanceled = false;
+  const total = chatIds.length;
+  const isBatch = total > 1;
 
-  try {
-    await postMessage(chatId, text, messageImage, messageAccountSelect.value);
-    setMessageStatus("Mensagem enviada com sucesso!", "success");
-    messageForm.reset();
-    messageImage = null;
-    renderMessageImage();
-  } catch (err) {
-    setMessageStatus(`Falha ao enviar mensagem: ${err.message}`, "error");
-  } finally {
-    messageSubmitBtn.disabled = false;
+  if (isBatch) {
+    messageProgressBar.hidden = false;
+    messageProgressFill.style.width = "0%";
+    messageCancelBtn.hidden = false;
+    messageCancelBtn.disabled = false;
   }
+
+  let successCount = 0;
+  const failures = [];
+
+  for (let i = 0; i < total; i++) {
+    if (messagePublishCanceled) break;
+
+    setMessageStatus(isBatch ? `Enviando ${i + 1} de ${total}...` : "Enviando...", "");
+    try {
+      await postMessage(chatIds[i], text, messageImage, messageAccountSelect.value);
+      successCount++;
+      if (isBatch) {
+        messageProgressFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+      }
+    } catch (err) {
+      failures.push({ phone: phones[i], error: err.message });
+    }
+
+    if (isBatch && i < total - 1 && !messagePublishCanceled) {
+      const delay = randomSendDelay();
+      setMessageStatus(`Aguardando ${Math.round(delay / 1000)}s antes do próximo envio (anti-ban)...`, "");
+      await cancellableSleep(delay, () => messagePublishCanceled);
+    }
+  }
+
+  messageCancelBtn.hidden = true;
+  messageProgressBar.hidden = true;
+  messageSubmitBtn.disabled = false;
+
+  if (messagePublishCanceled) {
+    setMessageStatus(`Envio cancelado — ${successCount} de ${total} mensagem(ns) enviada(s).`, successCount > 0 ? "success" : "");
+    return;
+  }
+
+  if (failures.length === 0) {
+    setMessageStatus(isBatch ? `${successCount} mensagem(ns) enviada(s) com sucesso!` : "Mensagem enviada com sucesso!", "success");
+  } else {
+    setMessageStatus(
+      `${successCount} de ${total} enviada(s). Falha para: ${failures.map((f) => f.phone).join(", ")}.`,
+      successCount > 0 ? "" : "error"
+    );
+  }
+
+  messageForm.reset();
+  messageImage = null;
+  renderMessageImage();
+  messagePhoneCountEl.textContent = "";
 });
