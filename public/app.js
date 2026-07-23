@@ -546,8 +546,11 @@ async function deleteAndMarkHistory(post, reloadFn) {
 
 async function loadPostedHistory() {
   try {
+    // Status do WhatsApp some sozinho após 24h — passado esse prazo não há
+    // mais o que apagar, então nem exibimos o post na lista.
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const response = await fetch(
-      `${window.SUPABASE_URL}/rest/v1/posted_history?deleted=eq.false&post_type=eq.status&order=posted_at.desc&limit=30`,
+      `${window.SUPABASE_URL}/rest/v1/posted_history?deleted=eq.false&post_type=eq.status&posted_at=gte.${cutoff}&order=posted_at.desc&limit=30`,
       { headers: supabaseHeaders() }
     );
     if (!response.ok) return;
@@ -573,36 +576,27 @@ async function loadPostedHistory() {
       accountStrong.textContent = accountLabel;
       info.append(accountStrong, document.createTextNode(new Date(post.posted_at).toLocaleString("pt-BR")));
 
-      // Status do WhatsApp some sozinho após 24h — passado esse prazo não há
-      // mais o que apagar, então nem mostramos a opção.
-      const hoursSincePosted = (Date.now() - new Date(post.posted_at).getTime()) / (1000 * 60 * 60);
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
 
-      if (hoursSincePosted < 24) {
-        const deleteBtn = document.createElement("button");
-        deleteBtn.type = "button";
-
-        if (post.message_id) {
-          deleteBtn.textContent = "Apagar do WhatsApp";
-          deleteBtn.addEventListener("click", async () => {
-            if (!(await askConfirm("Apagar este status do WhatsApp agora?"))) return;
-            deleteBtn.disabled = true;
-            try {
-              await deleteAndMarkHistory(post, loadPostedHistory);
-            } catch (err) {
-              deleteBtn.disabled = false;
-              setStatus(`Falha ao apagar do WhatsApp: ${err.message}`, "error");
-            }
-          });
-        } else {
-          deleteBtn.textContent = "Já apaguei";
-          deleteBtn.addEventListener("click", () => markHistoryDeleted(post.id, loadPostedHistory));
-        }
-
-        li.append(img, info, deleteBtn);
+      if (post.message_id) {
+        deleteBtn.textContent = "Apagar do WhatsApp";
+        deleteBtn.addEventListener("click", async () => {
+          if (!(await askConfirm("Apagar este status do WhatsApp agora?"))) return;
+          deleteBtn.disabled = true;
+          try {
+            await deleteAndMarkHistory(post, loadPostedHistory);
+          } catch (err) {
+            deleteBtn.disabled = false;
+            setStatus(`Falha ao apagar do WhatsApp: ${err.message}`, "error");
+          }
+        });
       } else {
-        li.append(img, info);
+        deleteBtn.textContent = "Já apaguei";
+        deleteBtn.addEventListener("click", () => markHistoryDeleted(post.id, loadPostedHistory));
       }
 
+      li.append(img, info, deleteBtn);
       postedListEl.appendChild(li);
     });
   } catch {
