@@ -573,27 +573,36 @@ async function loadPostedHistory() {
       accountStrong.textContent = accountLabel;
       info.append(accountStrong, document.createTextNode(new Date(post.posted_at).toLocaleString("pt-BR")));
 
-      const deleteBtn = document.createElement("button");
-      deleteBtn.type = "button";
+      // Status do WhatsApp some sozinho após 24h — passado esse prazo não há
+      // mais o que apagar, então nem mostramos a opção.
+      const hoursSincePosted = (Date.now() - new Date(post.posted_at).getTime()) / (1000 * 60 * 60);
 
-      if (post.message_id) {
-        deleteBtn.textContent = "Apagar do WhatsApp";
-        deleteBtn.addEventListener("click", async () => {
-          if (!(await askConfirm("Apagar este status do WhatsApp agora?"))) return;
-          deleteBtn.disabled = true;
-          try {
-            await deleteAndMarkHistory(post, loadPostedHistory);
-          } catch (err) {
-            deleteBtn.disabled = false;
-            setStatus(`Falha ao apagar do WhatsApp: ${err.message}`, "error");
-          }
-        });
+      if (hoursSincePosted < 24) {
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+
+        if (post.message_id) {
+          deleteBtn.textContent = "Apagar do WhatsApp";
+          deleteBtn.addEventListener("click", async () => {
+            if (!(await askConfirm("Apagar este status do WhatsApp agora?"))) return;
+            deleteBtn.disabled = true;
+            try {
+              await deleteAndMarkHistory(post, loadPostedHistory);
+            } catch (err) {
+              deleteBtn.disabled = false;
+              setStatus(`Falha ao apagar do WhatsApp: ${err.message}`, "error");
+            }
+          });
+        } else {
+          deleteBtn.textContent = "Já apaguei";
+          deleteBtn.addEventListener("click", () => markHistoryDeleted(post.id, loadPostedHistory));
+        }
+
+        li.append(img, info, deleteBtn);
       } else {
-        deleteBtn.textContent = "Já apaguei";
-        deleteBtn.addEventListener("click", () => markHistoryDeleted(post.id, loadPostedHistory));
+        li.append(img, info);
       }
 
-      li.append(img, info, deleteBtn);
       postedListEl.appendChild(li);
     });
   } catch {
